@@ -77,10 +77,10 @@ class TradeControllerTest {
         DataBuffer buffer = factory.wrap(csvInput.getBytes());
         Flux<DataBuffer> flux = Flux.just(buffer);
         String enrichedCsv = "enriched csv response";
-        when(tradeService.enrichStreamingTrades(any()))
+        when(tradeService.enrichTrades(any(), eq("text/csv")))
                 .thenReturn(Mono.just(enrichedCsv));
         webTestClient.post()
-                .uri("/api/v1/trade/stream")
+                .uri("/api/v1/trade")
                 .header("Content-Type", "text/csv")
                 .body(flux, DataBuffer.class)
                 .exchange()
