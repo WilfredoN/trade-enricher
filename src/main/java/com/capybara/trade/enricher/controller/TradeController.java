@@ -28,11 +28,9 @@ public class TradeController {
                     .body("Unsupported Content-Type"));
         }
 
-        Mono<String> result = tradeService.enrichTrades(trade, contentType)
-                .doOnError(TradeValidationException.class, e -> logger.error("Trade validation error: {}", e.getMessage()));
-        logger.debug("Trade enrichment result: {}", result);
 
-        return result
+        return tradeService.enrichTrades(trade, contentType)
+                .doOnError(TradeValidationException.class, e -> logger.error("Trade validation error: {}", e.getMessage()))
                 .map(res -> ResponseEntity.ok()
                         .header("Content-Type", contentType)
                         .body(res));

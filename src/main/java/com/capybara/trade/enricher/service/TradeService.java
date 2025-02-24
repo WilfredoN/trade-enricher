@@ -24,6 +24,7 @@ public class TradeService {
     private static final Logger logger = LoggerFactory.getLogger(TradeService.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final Pattern CSV_PATTERN = Pattern.compile(",");
+
     private final ProductMappingService productMappingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final XmlMapper xmlMapper = new XmlMapper();
@@ -53,6 +54,7 @@ public class TradeService {
         if (!isValidDate(columns[0].trim())) {
             return Mono.empty();
         }
+
         return Mono.just(new TradeDTO(
                 columns[0].trim(),
                 columns[1].trim(),

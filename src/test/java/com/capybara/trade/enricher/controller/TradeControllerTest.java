@@ -72,11 +72,11 @@ public class TradeControllerTest {
                 .returnResult(String.class)
                 .getResponseBody()
                 .blockFirst();
+
         if (response != null) {
             assertTrue(response.contains("<date>20230105</date>"));
             assertTrue(response.contains("<productId>10</productId>"));
             assertTrue(response.contains("<currency>USD</currency>"));
-            log.debug("XML Response: {}", response);
             assertEquals(2, response.split("<item>").length - 1);
             assertTrue(response.contains("<productName>"));
         }
@@ -151,7 +151,7 @@ public class TradeControllerTest {
                 .returnResult(String.class)
                 .getResponseBody()
                 .blockFirst();
-        log.debug(response);
+
         if (response != null) {
             assertEquals(1, response.split("\n").length);
             assertEquals("<trades></trades>", response);

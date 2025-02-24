@@ -35,9 +35,11 @@ public class ProductMappingService {
 
     public Mono<String> getProductName(String productId) {
         String productName = productCache.get(productId);
+
         if (productName != null) {
             return Mono.just(productName);
         }
+
         return reactiveRedisTemplate.opsForValue().get("product:" + productId)
                 .map(product -> {
                     if (product != null) {
