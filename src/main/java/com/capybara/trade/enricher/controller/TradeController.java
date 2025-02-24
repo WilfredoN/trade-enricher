@@ -28,16 +28,14 @@ public class TradeController {
                     .body("Unsupported Content-Type"));
         }
 
-        return tradeService.enrichTrades(trade, contentType)
-                .map(response -> ResponseEntity.ok()
+        Mono<String> result = tradeService.enrichTrades(trade, contentType)
+                .doOnError(TradeValidationException.class, e -> logger.error("Trade validation error: {}", e.getMessage()));
+        logger.debug("Trade enrichment result: {}", result);
+
+        return result
+                .map(res -> ResponseEntity.ok()
                         .header("Content-Type", contentType)
-                        .body(response))
-                .onErrorResume(TradeValidationException.class, e -> {
-                    logger.error("Trade validation error: {}", e.getMessage());
-                    return Mono.just(ResponseEntity.badRequest()
-                            .header("Content-Type", "text/plain")
-                            .body(e.getMessage()));
-                });
+                        .body(res));
     }
 
     private boolean isValidContentType(String contentType) {

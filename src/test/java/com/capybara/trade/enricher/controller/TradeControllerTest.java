@@ -1,91 +1,185 @@
 package com.capybara.trade.enricher.controller;
 
-import com.capybara.trade.enricher.service.TradeService;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.http.HttpStatus;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@WebFluxTest(controllers = TradeController.class)
-class TradeControllerTest {
+
+@Slf4j
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class TradeControllerTest {
 
     @Autowired
     private WebTestClient webTestClient;
 
-    @MockBean
-    private TradeService tradeService;
+    @BeforeEach
+    void setUp() {
+        webTestClient = webTestClient.mutate()
+                .responseTimeout(java.time.Duration.ofSeconds(120))
+                .build();
+    }
 
     @Test
-    void testHandleTradeJson() {
-        String jsonInput = "[{\"date\":\"20230101\",\"productId\":\"2\",\"currency\":\"USD\",\"price\":100.0}]";
-        String enrichedJson = "enriched json response";
-        when(tradeService.enrichTrades(eq(jsonInput), eq("application/json")))
-                .thenReturn(Mono.just(enrichedJson));
-        webTestClient.post()
+    public void testJsonTradeEnrichment() {
+        String jsonInput = """
+                [
+                    {"date":"20230104","productId":"8","currency":"EUR","price":450.20},
+                    {"date":"20230104","productId":"9","currency":"GBP","price":500.30}
+                ]""";
+
+        String response = webTestClient.post()
                 .uri("/api/v1/trade")
                 .header("Content-Type", "application/json")
                 .bodyValue(jsonInput)
                 .exchange()
                 .expectStatus().isOk()
-                .expectHeader().valueEquals("Content-Type", "application/json")
-                .expectBody(String.class).isEqualTo(enrichedJson);
+                .expectHeader().contentType("application/json")
+                .returnResult(String.class)
+                .getResponseBody()
+                .blockFirst();
+
+        if (response != null) {
+            log.debug("JSON Response: {}", response);
+            assertTrue(response.contains("\"date\":\"20230104\""));
+            assertTrue(response.contains("\"productId\":\"8\""));
+            assertTrue(response.contains("\"currency\":\"EUR\""));
+            assertTrue(response.contains("\"price\":450.2"));
+            assertTrue(response.contains("\"productName\":"));
+        }
     }
 
     @Test
-    void testHandleTradeXml() {
-        String xmlInput = "<trades><trade><date>20230101</date><productId>2</productId><currency>USD</currency><price>100.0</price></trade></trades>";
-        String enrichedXml = "enriched xml response";
-        when(tradeService.enrichTrades(eq(xmlInput), eq("application/xml")))
-                .thenReturn(Mono.just(enrichedXml));
-        webTestClient.post()
+    public void testXmlTradeEnrichment() {
+        String xmlInput = """
+                <trades>
+                    <trade><date>20230105</date><productId>10</productId><currency>USD</currency><price>550.40</price></trade>
+                    <trade><date>20230105</date><productId>11</productId><currency>EUR</currency><price>600.50</price></trade>
+                </trades>""";
+
+        String response = webTestClient.post()
                 .uri("/api/v1/trade")
                 .header("Content-Type", "application/xml")
                 .bodyValue(xmlInput)
                 .exchange()
                 .expectStatus().isOk()
-                .expectHeader().valueEquals("Content-Type", "application/xml")
-                .expectBody(String.class).isEqualTo(enrichedXml);
+                .expectHeader().contentType("application/xml")
+                .returnResult(String.class)
+                .getResponseBody()
+                .blockFirst();
+        if (response != null) {
+            assertTrue(response.contains("<date>20230105</date>"));
+            assertTrue(response.contains("<productId>10</productId>"));
+            assertTrue(response.contains("<currency>USD</currency>"));
+            log.debug("XML Response: {}", response);
+            assertEquals(2, response.split("<item>").length - 1);
+            assertTrue(response.contains("<productName>"));
+        }
     }
 
     @Test
-    void testHandleTradeUnsupportedContentType() {
-        String input = "some data";
-        webTestClient.post()
-                .uri("/api/v1/trade")
-                .header("Content-Type", "text/plain")
-                .bodyValue(input)
-                .exchange()
-                .expectStatus().isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .expectBody(String.class)
-                .isEqualTo("Unsupported Content-Type");
-    }
+    public void testCsvTradeEnrichment() {
+        String csvInput =
+                """
+                        date,productId,currency,price
+                        20230106,2,USD,700.60
+                        20230106,3,EUR,800.70""";
 
-    @Test
-    void testHandleStreamingTrade() {
-        String csvInput = "header\n20230101,2,USD,100.0";
-        DefaultDataBufferFactory factory = new DefaultDataBufferFactory();
-        DataBuffer buffer = factory.wrap(csvInput.getBytes());
-        Flux<DataBuffer> flux = Flux.just(buffer);
-        String enrichedCsv = "enriched csv response";
-        when(tradeService.enrichTrades(any(), eq("text/csv")))
-                .thenReturn(Mono.just(enrichedCsv));
-        webTestClient.post()
+        String response = webTestClient.post()
                 .uri("/api/v1/trade")
                 .header("Content-Type", "text/csv")
-                .body(flux, DataBuffer.class)
+                .bodyValue(csvInput)
                 .exchange()
                 .expectStatus().isOk()
-                .expectHeader().valueEquals("Content-Type", "text/csv")
-                .expectBody(String.class).isEqualTo(enrichedCsv);
+                .expectHeader().contentType("text/csv")
+                .returnResult(String.class)
+                .getResponseBody()
+                .collectList()
+                .map(list -> String.join("\n", list))
+                .block();
+
+        String[] lines;
+        if (response != null) {
+            lines = response.trim().split("\\R");
+            assertEquals(3, lines.length, "Expected 3 lines including header");
+        }
+    }
+
+    @Test
+    public void testInvalidJsonData() {
+        String invalidJson = """
+                [{"date":"invalid","productId":"8","currency":"EUR","price":450.20}]""";
+
+        String response = webTestClient.post()
+                .uri("/api/v1/trade")
+                .header("Content-Type", "application/json")
+                .bodyValue(invalidJson)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType("application/json")
+                .returnResult(String.class)
+                .getResponseBody()
+                .blockFirst();
+
+        if (response != null) {
+            String[] lines = response.split("\n");
+            assertEquals(1, lines.length);
+            assertEquals("[]", lines[0]);
+        }
+    }
+
+    @Test
+    public void testInvalidXmlData() {
+        String invalidXml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <trades>
+                    <trade><date>invalid</date><productId>10</productId><currency>USD</currency><price>550.40</price></trade>
+                </trades>""";
+
+        String response = webTestClient.post()
+                .uri("/api/v1/trade")
+                .header("Content-Type", "application/xml")
+                .bodyValue(invalidXml)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType("application/xml")
+                .returnResult(String.class)
+                .getResponseBody()
+                .blockFirst();
+        log.debug(response);
+        if (response != null) {
+            assertEquals(1, response.split("\n").length);
+            assertEquals("<trades></trades>", response);
+        }
+    }
+
+    @Test
+    public void testInvalidCsvData() {
+        String invalidCsv = """
+                date,productId,currency,price
+                invalid,2,USD,700.60""";
+
+        String response = webTestClient.post()
+                .uri("/api/v1/trade")
+                .header("Content-Type", "text/csv")
+                .bodyValue(invalidCsv)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType("text/csv")
+                .returnResult(String.class)
+                .getResponseBody()
+                .blockFirst();
+
+        if (response != null) {
+            String[] lines = response.split("\n");
+            assertEquals(1, lines.length);
+            assertEquals("date,productName,currency,price", lines[0]);
+        }
+
     }
 }

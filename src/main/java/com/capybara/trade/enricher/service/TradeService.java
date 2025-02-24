@@ -2,6 +2,7 @@ package com.capybara.trade.enricher.service;
 
 import com.capybara.trade.enricher.dto.EnrichedTradeDTO;
 import com.capybara.trade.enricher.dto.TradeDTO;
+import com.capybara.trade.enricher.exception.TradeValidationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
@@ -27,62 +29,76 @@ public class TradeService {
     private final XmlMapper xmlMapper = new XmlMapper();
 
     public Mono<String> enrichTrades(String tradeData, String contentType) {
-        return parseTrades(tradeData, contentType)
+        return validateAndParseTrades(tradeData, contentType)
                 .flatMap(this::enrichTrade)
                 .collectList()
-                .doOnSuccess(trades -> logger.info("Finished enriching trades. Total enriched trades: {}", trades.size()))
+                .doOnSuccess(trades -> {
+                    logger.debug("Finished enriching trades. Total enriched trades: {}", trades.size());
+                    trades.forEach(trade -> logger.debug("Enriched Trade: {}", trade));
+                })
                 .map(trades -> TradeFormatter.formatTrades(trades, contentType));
     }
 
-    private Mono<TradeDTO> createTradeDTO(String[] columns) {
+    private boolean isValidDate(String date) {
         try {
-            String date = columns[0].trim();
             LocalDate.parse(date, DATE_FORMATTER);
-            return Mono.just(new TradeDTO(
-                    date,
-                    columns[1].trim(),
-                    columns[2].trim(),
-                    Double.parseDouble(columns[3].trim())
-            ));
-        } catch (Exception e) {
-            logger.error("Invalid trade data: {} - {}", Arrays.toString(columns), e.getMessage());
-            return Mono.empty();
+            return true;
+        } catch (DateTimeParseException e) {
+            logger.warn("Invalid date format: {}", date);
+            return false;
         }
     }
 
-    private Flux<TradeDTO> parseTrades(String tradeData, String contentType) {
+    private Mono<TradeDTO> createTradeDTO(String[] columns) {
+        if (!isValidDate(columns[0].trim())) {
+            return Mono.empty();
+        }
+        return Mono.just(new TradeDTO(
+                columns[0].trim(),
+                columns[1].trim(),
+                columns[2].trim(),
+                Double.parseDouble(columns[3].trim())
+        ));
+    }
+
+    private Flux<TradeDTO> validateAndParseTrades(String tradeData, String contentType) {
         return Flux.defer(() -> {
             try {
                 if ("text/csv".equalsIgnoreCase(contentType)) {
-                    return Flux.fromStream(Arrays.stream(tradeData.split("\\r?\\n")).skip(1))
+                    String[] lines = tradeData.split("\\r?\\n");
+                    if (lines.length <= 1) {
+                        return Flux.empty();
+                    }
+                    return Flux.fromStream(Arrays.stream(lines).skip(1))
                             .map(CSV_PATTERN::split)
                             .filter(columns -> columns.length == 4)
                             .flatMap(this::createTradeDTO);
                 } else if ("application/json".equalsIgnoreCase(contentType)) {
-                    return Flux.fromArray(objectMapper.readValue(tradeData, TradeDTO[].class));
+                    TradeDTO[] trades = objectMapper.readValue(tradeData, TradeDTO[].class);
+                    return Flux.fromArray(trades)
+                            .filter(trade -> isValidDate(trade.getDate()));
                 } else if ("application/xml".equalsIgnoreCase(contentType)) {
-                    return Flux.fromArray(xmlMapper.readValue(tradeData, TradeDTO[].class));
+                    TradeDTO[] trades = xmlMapper.readValue(tradeData, TradeDTO[].class);
+                    return Flux.fromArray(trades)
+                            .filter(trade -> isValidDate(trade.getDate()));
                 }
+                return Flux.error(new TradeValidationException("Unsupported content type"));
             } catch (Exception e) {
-                logger.error("Error parsing trades: {}", tradeData, e);
+                logger.error("Error parsing trades: {}", e.getMessage());
+                return Flux.empty();
             }
-            return Flux.empty();
         });
     }
 
     private Mono<EnrichedTradeDTO> enrichTrade(TradeDTO trade) {
         return productMappingService.getProductName(trade.getProductId())
-                .map(productName -> {
-                    if ("Missing Product Name".equals(productName)) {
-                        logger.warn("Missing product mapping for productId: {}", trade.getProductId());
-                    }
-                    return new EnrichedTradeDTO(
-                            trade.getDate(),
-                            trade.getProductId(),
-                            trade.getCurrency(),
-                            trade.getPrice(),
-                            productName
-                    );
-                });
+                .defaultIfEmpty("Missing Product Name")
+                .map(productName -> new EnrichedTradeDTO(
+                        trade.getDate(),
+                        trade.getProductId(),
+                        trade.getCurrency(),
+                        trade.getPrice(),
+                        productName
+                ));
     }
 }

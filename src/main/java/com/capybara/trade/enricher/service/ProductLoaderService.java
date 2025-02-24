@@ -34,7 +34,7 @@ public class ProductLoaderService {
 
     @PostConstruct
     public void loadProductsFromFile() {
-        logger.info("Starting product load from file: {}", productFile);
+        logger.debug("Starting product load from file: {}", productFile);
         Instant start = Instant.now();
         AtomicInteger totalProducts = new AtomicInteger(0);
         AtomicInteger batchCount = new AtomicInteger(0);
@@ -63,7 +63,7 @@ public class ProductLoaderService {
         } catch (IOException e) {
             logger.error("Failed to read product file: {}", productFile, e);
         }
-        logger.info("Triggering product mapping cache reload");
+        logger.debug("Triggering product mapping cache reload");
         productMappingService.reloadCache();
     }
 
@@ -86,7 +86,7 @@ public class ProductLoaderService {
                 .doOnError(e -> logger.error("Failed to save batch #{} to Redis", batchNumber, e))
                 .subscribe(result -> {
                     Duration batchDuration = Duration.between(batchStart, Instant.now());
-                    logger.info("Batch #{}: Processed {} products ({} valid, {} invalid) in {} ms",
+                    logger.debug("Batch #{}: Processed {} products ({} valid, {} invalid) in {} ms",
                             batchNumber, lines.size(), products.size(), invalidLines.get(), batchDuration.toMillis());
                 });
         return invalidLines.get();
@@ -95,12 +95,12 @@ public class ProductLoaderService {
     private void logFinalStats(int totalProducts, int invalidLines, int batchCount, Duration duration) {
         Runtime runtime = Runtime.getRuntime();
         long memoryUsed = runtime.totalMemory() - runtime.freeMemory();
-        logger.info("Product loading completed:");
-        logger.info("Total products processed: {}", totalProducts);
-        logger.info("Invalid lines skipped: {}", invalidLines);
-        logger.info("Number of batches: {}", batchCount);
-        logger.info("Total processing time: {} seconds", duration.getSeconds());
-        logger.info("Memory used: {} MB", memoryUsed / (1024 * 1024));
-        logger.info("Average processing time per product: {} ms", totalProducts > 0 ? duration.toMillis() / totalProducts : 0);
+        logger.debug("Product loading completed:");
+        logger.debug("Total products processed: {}", totalProducts);
+        logger.debug("Invalid lines skipped: {}", invalidLines);
+        logger.debug("Number of batches: {}", batchCount);
+        logger.debug("Total processing time: {} seconds", duration.getSeconds());
+        logger.debug("Memory used: {} MB", memoryUsed / (1024 * 1024));
+        logger.debug("Average processing time per product: {} ms", totalProducts > 0 ? duration.toMillis() / totalProducts : 0);
     }
 }
