@@ -7,19 +7,14 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-import java.util.List;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,23 +84,5 @@ public class TradeService {
                             productName
                     );
                 });
-    }
-
-    public Mono<String> enrichStreamingTrades(Flux<DataBuffer> dataBufferFlux) {
-        return StreamingTradeParser.parseCSV(dataBufferFlux)
-                .windowTimeout(5000, Duration.ofSeconds(5))
-                .flatMap(window -> window
-                        .collectList()
-                        .flatMap(trades -> Flux.fromIterable(trades)
-                                .parallel(16)
-                                .runOn(Schedulers.boundedElastic())
-                                .flatMap(this::enrichTrade)
-                                .sequential()
-                                .collectList()))
-                .collectList()
-                .map(tradesList -> tradesList.stream().flatMap(List::stream)
-                        .collect(Collectors.toList()))
-                .doOnSuccess(trades -> logger.info("Finished streaming enrichment. Total enriched trades: {}", trades.size()))
-                .map(trades -> TradeFormatter.formatTrades(trades, "text/csv"));
     }
 }

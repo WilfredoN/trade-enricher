@@ -32,13 +32,11 @@ public class TradeController {
                 .map(response -> ResponseEntity.ok()
                         .header("Content-Type", contentType)
                         .body(response))
-                .onErrorResume(TradeValidationException.class, e ->
-                        Mono.just(ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .body("Validation error: " + e.getMessage())))
-                .onErrorResume(Exception.class, e -> {
-                    logger.error("Error processing trade", e);
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                            .body("Error processing trade"));
+                .onErrorResume(TradeValidationException.class, e -> {
+                    logger.error("Trade validation error: {}", e.getMessage());
+                    return Mono.just(ResponseEntity.badRequest()
+                            .header("Content-Type", "text/plain")
+                            .body(e.getMessage()));
                 });
     }
 
