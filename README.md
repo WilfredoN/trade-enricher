@@ -78,6 +78,39 @@ spring.task.execution.pool.max-size=16 # Thread pool settings
 spring.task.execution.pool.queue-capacity=10000 # Thread pool settings
 ```
 
+## Completed Tasks
+
+### 1. Multiple Input Formats Support
+- ✅ Implemented support for CSV, JSON, and XML input formats
+- ✅ Used Spring WebFlux for handling different content types
+- ✅ Implemented proper serialization/deserialization for each format
+- See example requests in the API Documentation section
+
+### 2. Async Processing
+- ✅ Implemented non-blocking async processing using Spring WebFlux
+- ✅ Utilized Project Reactor for reactive programming
+- ✅ Configured thread pool settings for optimal performance
+- ✅ Implemented async Redis operations
+
+### 3. Reactive Data Streaming
+- ✅ Implemented reactive streaming using Project Reactor
+- ✅ Used Flux for handling data streams
+- ✅ Efficient memory usage for large datasets
+- ✅ Reactive Redis operations integration
+
+## Performance Test Results
+
+### Integration Tests results
+![Integration tests results](images/completed_tests_screenshot.png)
+- ✅ Added integration tests for trade enrichment
+- ✅ Verified JSON, XML, and CSV input handling
+- ✅ Checked response content and structure
+- ✅ Tested invalid data scenarios for JSON, XML, and CSV
+- ✅ Ensured proper logging of responses
+- ✅ Configured WebTestClient for testing with a response timeout
+- ✅ Validated enriched trade data contains product information
+- ✅ Confirmed correct handling of empty or invalid responses
+
 ## Future Improvements
 
 1. **Performance Optimizations**
